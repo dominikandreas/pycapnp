@@ -783,9 +783,24 @@ cdef _setBaseStringField(DynamicStruct_Builder thisptr, _StructSchemaField field
     thisptr.setByField(field.thisptr, temp)
 
 
+cdef _check_cast_to_basic_type(value):
+    # check if it's a subclass (has a __mro__ attribute, the method resolution order containing the chain of classes)
+    value_type = type(value)
+    mro = getattr(value_type, "__mro__", None)
+    if mro and len(mro) > 2:
+        if mro[0] is bool:  # in cython bool is a subtype of int and thus needs a special case to not be cast to int
+            return value, bool
+        basic_type = mro[-2]  # inheritance chain is (subclass, ..., basic type, object)
+        for dtype in (int, long, float, str, bytes, bool):
+            if basic_type is dtype:
+                return basic_type(value), basic_type
+    return value, value_type
+
+
 cdef _setDynamicField(_DynamicSetterClasses thisptr, field, value, parent):
     cdef C_DynamicValue.Reader temp
-    value_type = type(value)
+
+    value, value_type = _check_cast_to_basic_type(value)
 
     if value_type is int or value_type is long:
         if value < 0:
@@ -846,7 +861,7 @@ cdef _setDynamicField(_DynamicSetterClasses thisptr, field, value, parent):
 # TODO: Is this function used by anyone? Can it be removed?
 cdef _setDynamicFieldWithField(DynamicStruct_Builder thisptr, _StructSchemaField field, value, parent):
     cdef C_DynamicValue.Reader temp
-    value_type = type(value)
+    value, value_type = _check_cast_to_basic_type(value)
 
     if value_type is int or value_type is long:
         if value < 0:
@@ -900,7 +915,7 @@ cdef _setDynamicFieldWithField(DynamicStruct_Builder thisptr, _StructSchemaField
 # TODO: Is this function used by anyone? Can it be removed?
 cdef _setDynamicFieldStatic(DynamicStruct_Builder thisptr, field, value, parent):
     cdef C_DynamicValue.Reader temp
-    value_type = type(value)
+    value, value_type = _check_cast_to_basic_type(value)
 
     if value_type is int or value_type is long:
         if value < 0:
